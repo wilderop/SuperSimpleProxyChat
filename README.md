@@ -27,4 +27,6 @@ Placeholders: `{player}`, `{nick}`, `{message}`. MiniMessage tags are supported.
 
 - Chat is **not cancelled** on the proxy, so signed 1.19.1+ clients are not kicked.
 - Offline mail only works for names the proxy has seen at least once (`known-names.txt`).
+- Nicks persist in `nicks.txt`, ignores in `ignores.txt`, queued mail in `mail.txt`.
+- On each backend join the proxy pushes the player's nick + ignore list so every Paper server stays in sync.
 - Does not replace a Discord plugin. It only controls in-game / proxy chat.

@@ -13,6 +13,7 @@ import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.messages.ChannelIdentifier;
 import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import net.kyori.adventure.text.Component;
@@ -74,6 +75,8 @@ public class SuperSimpleProxyChat {
         loadConfig();
         loadKnownNames();
         loadMailbox();
+        loadNicks();
+        loadIgnores();
         server.getChannelRegistrar().register(CHANNEL_IGNORE, CHANNEL_NICK, CHANNEL_MAIL);
         logger.info("Super Simple Proxy Chat enabled.");
     }
@@ -82,6 +85,8 @@ public class SuperSimpleProxyChat {
     public void onShutdown(ProxyShutdownEvent event) {
         saveKnownNames();
         saveMailbox();
+        saveNicks();
+        saveIgnores();
     }
 
     @Subscribe
@@ -100,6 +105,7 @@ public class SuperSimpleProxyChat {
     @Subscribe
     public void onConnected(ServerConnectedEvent event) {
         deliverMail(event.getPlayer());
+        pushState(event.getPlayer());
     }
 
     @Subscribe
@@ -143,33 +149,79 @@ public class SuperSimpleProxyChat {
     @Subscribe
     public void onPluginMessage(PluginMessageEvent event) {
         ChannelIdentifier id = event.getIdentifier();
+        if (!id.equals(CHANNEL_IGNORE) && !id.equals(CHANNEL_NICK) && !id.equals(CHANNEL_MAIL)) {
+            return;
+        }
+        if (!(event.getSource() instanceof ServerConnection)) {
+            event.setResult(PluginMessageEvent.ForwardResult.handled());
+            return;
+        }
+        event.setResult(PluginMessageEvent.ForwardResult.handled());
         String payload = new String(event.getData(), StandardCharsets.UTF_8);
 
         if (id.equals(CHANNEL_IGNORE)) {
             handleIgnore(payload);
         } else if (id.equals(CHANNEL_NICK)) {
             handleNick(payload);
-        } else if (id.equals(CHANNEL_MAIL)) {
+        } else {
             handleMail(payload);
         }
     }
 
     private void handleIgnore(String payload) {
-        String[] parts = payload.split("\\|", 3);
-        if (parts.length != 3) {
+        String[] parts = payload.split("\\|", 4);
+        if (parts.length >= 4 && "NAME".equals(parts[0])) {
+            handleNamedIgnore(parts);
+            return;
+        }
+        if (parts.length < 3) {
             return;
         }
         try {
             UUID ignorer = UUID.fromString(parts[0]);
             UUID ignored = UUID.fromString(parts[1]);
-            Set<UUID> set = globalIgnores.computeIfAbsent(ignorer, k -> new HashSet<>());
-            if ("add".equalsIgnoreCase(parts[2])) {
-                set.add(ignored);
-            } else {
-                set.remove(ignored);
-            }
+            applyIgnore(ignorer, ignored, parts[2]);
+            saveIgnores();
         } catch (IllegalArgumentException ignored) {
             logger.warn("Bad ignore payload: {}", payload);
+        }
+    }
+
+    private void handleNamedIgnore(String[] parts) {
+        try {
+            UUID ignorer = UUID.fromString(parts[1]);
+            String targetName = parts[2];
+            UUID ignored = knownNames.get(targetName.toLowerCase(Locale.ROOT));
+            Optional<Player> online = findOnline(targetName);
+            if (online.isPresent()) {
+                ignored = online.get().getUniqueId();
+            }
+            if (ignored == null) {
+                return;
+            }
+            String action = parts[3];
+            if ("toggle".equalsIgnoreCase(action)) {
+                Set<UUID> set = globalIgnores.computeIfAbsent(ignorer, k -> new HashSet<>());
+                if (set.contains(ignored)) {
+                    set.remove(ignored);
+                } else {
+                    set.add(ignored);
+                }
+            } else {
+                applyIgnore(ignorer, ignored, action);
+            }
+            saveIgnores();
+        } catch (IllegalArgumentException ignored) {
+            logger.warn("Bad named ignore payload");
+        }
+    }
+
+    private void applyIgnore(UUID ignorer, UUID ignored, String action) {
+        Set<UUID> set = globalIgnores.computeIfAbsent(ignorer, k -> new HashSet<>());
+        if ("add".equalsIgnoreCase(action)) {
+            set.add(ignored);
+        } else {
+            set.remove(ignored);
         }
     }
 
@@ -185,6 +237,7 @@ public class SuperSimpleProxyChat {
             } else {
                 customNicks.put(uuid, parts[1]);
             }
+            saveNicks();
         } catch (IllegalArgumentException ignored) {
             logger.warn("Bad nick payload: {}", payload);
         }
@@ -229,7 +282,7 @@ public class SuperSimpleProxyChat {
         if (targetOnline.isPresent()) {
             Player target = targetOnline.get();
             target.sendMessage(toTarget);
-            sendToPlayerBackend(target, CHANNEL_MAIL, "LASTREPLY|" + from);
+            sendToPlayerBackend(target, CHANNEL_MAIL, "LASTREPLY|" + from + "|" + fromName);
             replyBackend(senderOpt.orElse(null), "ACK_SENT|" + target.getUsername() + "|" + message);
         } else {
             mailbox.computeIfAbsent(targetUuid, k -> new ArrayList<>())
@@ -256,8 +309,24 @@ public class SuperSimpleProxyChat {
             lastFrom = mail.from;
         }
         if (lastFrom != null) {
-            sendToPlayerBackend(player, CHANNEL_MAIL, "LASTREPLY|" + lastFrom);
+            String lastName = inbox.get(inbox.size() - 1).fromName;
+            sendToPlayerBackend(player, CHANNEL_MAIL, "LASTREPLY|" + lastFrom + "|" + lastName);
         }
+    }
+
+    private void pushState(Player player) {
+        UUID uuid = player.getUniqueId();
+        String nick = customNicks.get(uuid);
+        sendToPlayerBackend(player, CHANNEL_NICK, "PUSH|" + uuid + "|" + (nick == null ? "RESET" : nick));
+        Set<UUID> ignored = globalIgnores.getOrDefault(uuid, Collections.emptySet());
+        StringBuilder joined = new StringBuilder();
+        for (UUID id : ignored) {
+            if (joined.length() > 0) {
+                joined.append(',');
+            }
+            joined.append(id);
+        }
+        sendToPlayerBackend(player, CHANNEL_IGNORE, "PUSH|" + uuid + "|" + joined);
     }
 
     private void replyBackend(Player sender, String payload) {
@@ -409,6 +478,95 @@ public class SuperSimpleProxyChat {
             Files.write(file, lines, StandardCharsets.UTF_8);
         } catch (IOException e) {
             logger.warn("Failed to save mail.txt", e);
+        }
+    }
+
+    private void loadNicks() {
+        Path file = dataDirectory.resolve("nicks.txt");
+        if (!Files.exists(file)) {
+            return;
+        }
+        try {
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                String[] parts = line.split("=", 2);
+                if (parts.length != 2) {
+                    continue;
+                }
+                try {
+                    customNicks.put(UUID.fromString(parts[0].trim()),
+                            new String(Base64.getDecoder().decode(parts[1].trim()), StandardCharsets.UTF_8));
+                } catch (RuntimeException ignored) {
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Failed to load nicks.txt", e);
+        }
+    }
+
+    private void saveNicks() {
+        Path file = dataDirectory.resolve("nicks.txt");
+        List<String> lines = new ArrayList<>();
+        for (Map.Entry<UUID, String> entry : customNicks.entrySet()) {
+            String encoded = Base64.getEncoder().encodeToString(entry.getValue().getBytes(StandardCharsets.UTF_8));
+            lines.add(entry.getKey() + "=" + encoded);
+        }
+        try {
+            Files.createDirectories(dataDirectory);
+            Files.write(file, lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            logger.warn("Failed to save nicks.txt", e);
+        }
+    }
+
+    private void loadIgnores() {
+        Path file = dataDirectory.resolve("ignores.txt");
+        if (!Files.exists(file)) {
+            return;
+        }
+        try {
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                String[] parts = line.split("=", 2);
+                if (parts.length != 2) {
+                    continue;
+                }
+                try {
+                    UUID owner = UUID.fromString(parts[0].trim());
+                    Set<UUID> set = globalIgnores.computeIfAbsent(owner, k -> new HashSet<>());
+                    if (parts[1].isBlank()) {
+                        continue;
+                    }
+                    for (String token : parts[1].split(",")) {
+                        try {
+                            set.add(UUID.fromString(token.trim()));
+                        } catch (IllegalArgumentException ignored) {
+                        }
+                    }
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Failed to load ignores.txt", e);
+        }
+    }
+
+    private void saveIgnores() {
+        Path file = dataDirectory.resolve("ignores.txt");
+        List<String> lines = new ArrayList<>();
+        for (Map.Entry<UUID, Set<UUID>> entry : globalIgnores.entrySet()) {
+            StringBuilder joined = new StringBuilder();
+            for (UUID id : entry.getValue()) {
+                if (joined.length() > 0) {
+                    joined.append(',');
+                }
+                joined.append(id);
+            }
+            lines.add(entry.getKey() + "=" + joined);
+        }
+        try {
+            Files.createDirectories(dataDirectory);
+            Files.write(file, lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            logger.warn("Failed to save ignores.txt", e);
         }
     }
 
