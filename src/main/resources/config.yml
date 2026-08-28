@@ -1,0 +1,3 @@
+# Super Simple Proxy Chat
+# MiniMessage is supported. Placeholders: {player} {message} {nick}
+chat-format: "<{nick}> {message}"

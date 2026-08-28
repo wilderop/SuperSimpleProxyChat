@@ -1,0 +1,9 @@
+{
+  "id": "supersimpleproxychat",
+  "name": "Super Simple Proxy Chat",
+  "version": "1.0.0",
+  "description": "Cross-server chat with nicks, ignores, and networked /msg mail",
+  "authors": ["wilderop"],
+  "dependencies": [],
+  "main": "com.wilderop.proxychat.SuperSimpleProxyChat"
+}
