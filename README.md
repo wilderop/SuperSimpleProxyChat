@@ -1,3 +1,6 @@
+<!-- azpbmd-live -->
+**Live:** velocity
+<!-- /azpbmd-live -->
 # Super Simple Proxy Chat
 
 Velocity plugin for the LawlessMC network.
