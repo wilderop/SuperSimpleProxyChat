@@ -1,0 +1,35 @@
+# Super Simple Proxy Chat - Configuration
+# ======================================
+
+# The chat message format broadcasted across all servers via the proxy.
+# 
+# Supported placeholders:
+#   {player}     → The username of the player who sent the message
+#   {message}    → The actual chat message (plain text)
+#
+# You can also use any PlaceholderAPI placeholders (%...%) if PAPIProxyBridge is installed
+# on the proxy and backend servers (e.g. %player_ping%, %vault_prefix%, %essentials_nick%, etc.)
+#
+# MiniMessage formatting is fully supported:
+#   <gray>, <red>, <rainbow>, <gradient:red:blue>, <#ff0000>, etc.
+#
+chat-format = "<{player}> {message}"
+
+# Shared chat across both Velocity proxies. Leave redis-uri empty to stay local.
+# Put the live URI only in plugins/supersimpleproxychat/config.toml on the proxy.
+redis-uri = ""
+proxy-id = "home"
+
+# Some example alternative formats you can copy-paste:
+#
+# With a simple arrow and gray username:
+# chat-format = "<gray>{player}</gray> » {message}"
+#
+# With ping display (requires PlaceholderAPI):
+# chat-format = "<{player}> {message} <gray>(%player_ping%ms)</gray>"
+#
+# With prefix/suffix from permissions plugin (Vault + PAPI):
+# chat-format = "%vault_prefix%<white>{player}%vault_suffix%</white> » {message}"
+#
+# Rainbow name + bold message:
+# chat-format = "<rainbow>{player}</rainbow> <bold>{message}</bold>"

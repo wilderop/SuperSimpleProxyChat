@@ -4,18 +4,15 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.wilderop</groupId>
+    <groupId>com.example</groupId>
     <artifactId>supersimpleproxychat</artifactId>
-    <version>1.0.0</version>
-    <packaging>jar</packaging>
-
-    <name>SuperSimpleProxyChat</name>
-    <description>Velocity cross-server chat with nicks, ignores, and networked private mail</description>
+    <version>1.3.2</version>
+    <name>Super Simple Proxy Chat</name>
 
     <properties>
-        <java.version>17</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <velocity.version>3.4.0-SNAPSHOT</velocity.version>
     </properties>
 
     <repositories>
@@ -23,33 +20,59 @@
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
+        <repository>
+            <id>william278-releases</id>
+            <url>https://repo.william278.net/releases/</url>
+        </repository>
     </repositories>
 
     <dependencies>
         <dependency>
             <groupId>com.velocitypowered</groupId>
             <artifactId>velocity-api</artifactId>
-            <version>${velocity.version}</version>
+            <version>3.5.0-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- MiniMessage (bundled with Velocity, declared for clarity) -->
+        <dependency>
+            <groupId>net.kyori</groupId>
+            <artifactId>adventure-text-minimessage</artifactId>
+            <version>4.17.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- PAPIProxyBridge - optional soft dependency for PlaceholderAPI support -->
+        <dependency>
+            <groupId>net.william278</groupId>
+            <artifactId>papiproxybridge</artifactId>
+            <version>1.8.4</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
-            <version>2.2</version>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.2.0</version>
         </dependency>
     </dependencies>
 
     <build>
-        <finalName>SuperSimpleProxyChat</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <release>${java.version}</release>
+                    <source>21</source>
+                    <target>21</target>
                 </configuration>
             </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -61,23 +84,36 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>com.velocitypowered:velocity-api</exclude>
+                                    <exclude>net.kyori:adventure-*</exclude>
+                                    <exclude>net.william278:papiproxybridge</exclude>
+                                </excludes>
+                            </artifactSet>
                             <relocations>
                                 <relocation>
-                                    <pattern>org.yaml.snakeyaml</pattern>
-                                    <shadedPattern>com.wilderop.proxychat.lib.snakeyaml</shadedPattern>
+                                    <pattern>redis.clients</pattern>
+                                    <shadedPattern>com.example.supersimpleproxychat.lib.redis</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.commons.pool2</pattern>
+                                    <shadedPattern>com.example.supersimpleproxychat.lib.pool2</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.json</pattern>
+                                    <shadedPattern>com.example.supersimpleproxychat.lib.jsonorg</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.google.gson</pattern>
+                                    <shadedPattern>com.example.supersimpleproxychat.lib.gson</shadedPattern>
                                 </relocation>
                             </relocations>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
     </build>
 </project>

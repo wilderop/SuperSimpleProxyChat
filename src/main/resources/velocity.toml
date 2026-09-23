@@ -1,0 +1,6 @@
+name = "Super Simple Proxy Chat"
+version = "1.1"
+id = "supersimpleproxychat"
+authors = ["YourName"]
+description = "Super simple cross-server chat broadcasting"
+main = "com.example.supersimpleproxychat.SuperSimpleProxyChat"
